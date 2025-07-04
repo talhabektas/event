@@ -1,0 +1,233 @@
+# ===================================
+# EVENT MANAGEMENT SYSTEM .gitignore
+# ===================================
+
+# ============= BACKEND (Go) =============
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+backend/cmd/api/api.exe
+backend/cmd/api/api
+api
+main
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+backend/.env*
+
+# Uploads & User Content
+backend/cmd/api/uploads/
+backend/uploads/
+uploads/
+avatars/
+images/
+files/
+
+# ============= FRONTEND (React/TS) =============
+# Dependencies
+frontend/node_modules/
+node_modules/
+
+# Production builds
+frontend/dist/
+frontend/build/
+frontend/dist-ssr/
+build/
+dist/
+
+# Frontend env files
+frontend/.env*
+
+# Local development
+*.local
+
+# ============= DATABASE =============
+# MySQL
+*.sql
+*.sql.bak
+*.dump
+database/dumps/
+db_backup/
+
+# SQLite (if used)
+*.db
+*.sqlite
+*.sqlite3
+
+# ============= LOGS =============
+# Application logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Go logs
+backend/logs/
+backend/*.log
+
+# ============= IDE & EDITORS =============
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# ============= OPERATING SYSTEM =============
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ============= SECURITY & SECRETS =============
+# API Keys & Secrets
+config/secrets.json
+secrets/
+.secrets
+*.pem
+*.key
+*.p12
+*.crt
+
+# JWT Secrets
+jwt_secret
+jwt.key
+
+# Database credentials
+database.yml
+db_config.json
+
+# ============= TEMPORARY FILES =============
+# Temporary directories
+tmp/
+temp/
+.tmp/
+.temp/
+
+# Cache directories
+.cache/
+.parcel-cache/
+.next/
+.nuxt/
+.vuepress/dist/
+
+# Coverage reports
+coverage/
+*.lcov
+.nyc_output/
+
+# ============= PACKAGE MANAGERS =============
+# npm
+package-lock.json
+.npm
+
+# Yarn
+yarn.lock
+.yarn/
+.pnp.*
+
+# pnpm
+pnpm-lock.yaml
+
+# ============= MISC =============
+# Backup files
+*.bak
+*.backup
+*.orig
+*.tmp
+
+# Documentation builds
+docs/_build/
+
+# Test files
+.coverage
+.pytest_cache/
+__pycache__/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Archives
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# ============= PROJECT SPECIFIC =============
+# Event images that shouldn't be in repo
+event_images/
+user_uploads/
+profile_pictures/
+
+# Development databases
+dev.db
+test.db
+
+# Config files with sensitive data
+backend/internal/config/production.json
+config/prod.yml 
