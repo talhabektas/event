@@ -1,41 +1,197 @@
-@tailwind base;
-/* Tailwind'in kendi temel stilleri */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-/* Bizim özel temel stillerimiz */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global base styles with dark mode support */
 @layer base {
-    body {
-        @apply bg-bg-default text-neutral-700 antialiased;
+    html {
+        scroll-behavior: smooth;
     }
 
+    body {
+        @apply bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-200 text-neutral-800 antialiased;
+        @apply dark:bg-gradient-to-br dark:from-dark-900 dark:via-dark-800 dark:to-dark-950 dark:text-neutral-100;
+        @apply transition-colors duration-300 ease-in-out;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        min-height: 100vh;
+    }
+
+    /* Enhanced Typography */
     h1,
     h2,
     h3,
     h4,
     h5,
     h6 {
-        @apply font-semibold text-neutral-800;
+        @apply font-semibold text-neutral-900 dark:text-neutral-50 tracking-tight leading-tight;
     }
 
     h1 {
-        @apply text-3xl sm:text-4xl;
+        @apply text-3xl sm:text-4xl lg:text-5xl font-bold;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
 
     h2 {
-        @apply text-2xl sm:text-3xl;
+        @apply text-2xl sm:text-3xl lg:text-4xl font-semibold;
     }
 
     h3 {
-        @apply text-xl sm:text-2xl;
+        @apply text-xl sm:text-2xl lg:text-3xl font-medium;
+    }
+
+    h4 {
+        @apply text-lg sm:text-xl font-medium;
     }
 
     p {
-        @apply text-base leading-relaxed text-neutral-600;
+        @apply text-base leading-relaxed text-neutral-600 dark:text-neutral-300;
     }
 
     a {
-        @apply text-primary hover:text-primary-dark transition-colors duration-150;
+        @apply text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300;
+        @apply transition-colors duration-200 ease-in-out;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        @apply bg-neutral-100 dark:bg-dark-800;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        @apply bg-neutral-300 dark:bg-dark-600 rounded-full;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        @apply bg-neutral-400 dark:bg-dark-500;
     }
 }
 
-@tailwind components;
-@tailwind utilities;
+/* Component styles */
+@layer components {
+
+    /* Glassmorphism card styles */
+    .glass-card {
+        @apply bg-white/70 dark:bg-dark-800/70 backdrop-blur-lg border border-white/20 dark:border-dark-700/50;
+        @apply shadow-card-light dark:shadow-card-dark rounded-2xl;
+        @apply transition-all duration-300 ease-in-out;
+    }
+
+    .glass-card:hover {
+        @apply transform scale-[1.02] shadow-xl;
+    }
+
+    /* Modern button base */
+    .btn-modern {
+        @apply relative overflow-hidden rounded-xl font-medium transition-all duration-300 ease-out;
+        @apply transform hover:scale-105 active:scale-95;
+        @apply shadow-lg hover:shadow-xl;
+    }
+
+    /* Navbar glass effect */
+    .navbar-glass {
+        @apply bg-white/80 dark:bg-dark-900/80 backdrop-blur-xl border-b border-neutral-200/50 dark:border-dark-700/50;
+        @apply shadow-navbar dark:shadow-navbar-dark transition-all duration-300;
+    }
+
+    /* Form inputs with modern styling */
+    .input-modern {
+        @apply bg-white/50 dark:bg-dark-800/50 border border-neutral-300/50 dark:border-dark-600/50;
+        @apply focus:bg-white dark:focus:bg-dark-800/80 rounded-xl px-4 py-3;
+        @apply focus:border-primary-500 dark:focus:border-primary-400 focus:ring-2 focus:ring-primary-500/20;
+        @apply transition-all duration-200 ease-out;
+    }
+
+    /* Modern card hover effects */
+    .hover-lift {
+        @apply transition-all duration-300 ease-out transform hover:-translate-y-2 hover:scale-[1.02];
+        @apply hover:shadow-2xl dark:hover:shadow-glass-dark;
+    }
+
+    /* Gradient text */
+    .gradient-text {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    /* Floating animation */
+    .float-animation {
+        animation: float 6s ease-in-out infinite;
+    }
+
+    /* Pulse effect for notifications */
+    .pulse-effect {
+        @apply animate-pulse;
+    }
+}
+
+/* Utility classes */
+@layer utilities {
+
+    /* Theme transition classes */
+    .theme-transition {
+        @apply transition-all duration-300 ease-in-out;
+    }
+
+    /* Glass backdrop */
+    .backdrop-glass {
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+    }
+
+    /* Gradient borders */
+    .border-gradient {
+        background: linear-gradient(135deg, #6366f1, #8b5cf6) padding-box,
+            linear-gradient(135deg, #6366f1, #8b5cf6) border-box;
+        border: 2px solid transparent;
+    }
+
+    /* Text shadow utilities */
+    .text-shadow-sm {
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
+
+    .text-shadow {
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .text-shadow-lg {
+        text-shadow: 0 4px 8px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Custom spacing */
+    .section-padding {
+        @apply px-4 sm:px-6 lg:px-8 py-8 lg:py-12;
+    }
+
+    .container-padding {
+        @apply px-4 sm:px-6 lg:px-8;
+    }
+}
+
+/* Print styles */
+@media print {
+    * {
+        @apply text-black bg-white !important;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}

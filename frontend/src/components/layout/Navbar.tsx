@@ -6,10 +6,11 @@ import {
     XMarkIcon,
     BellIcon,
     ChatBubbleLeftEllipsisIcon,
-    ChatBubbleLeftRightIcon
+    SparklesIcon
 } from '@heroicons/react/24/outline';
 import type { User } from '../../services/authService';
 import Button from '../common/Button';
+import ThemeToggle from '../common/ThemeToggle';
 import ConversationsList from '../chat/ConversationsList';
 import { useApp } from '../../contexts/AppContext';
 import NotificationDropdown from './NotificationDropdown';
@@ -33,153 +34,191 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
         navigate('/');
     };
 
+    const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+        `px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ease-out transform hover:scale-105 ${isActive
+            ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 shadow-lg'
+            : 'text-neutral-700 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-neutral-100 dark:hover:bg-dark-700/50'
+        }`;
+
+    const mobileNavLinkClass = ({ isActive }: { isActive: boolean }) =>
+        `block px-4 py-3 rounded-xl text-base font-medium transition-all duration-200 ${isActive
+            ? 'text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30'
+            : 'text-neutral-700 dark:text-neutral-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-neutral-100 dark:hover:bg-dark-700/50'
+        }`;
+
     return (
-        <nav className="bg-bg-surface shadow-md border-b border-neutral-200">
+        <nav className="navbar-glass sticky top-0 z-50 backdrop-blur-xl border-b border-neutral-200/50 dark:border-dark-700/50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between h-16">
+                    {/* Logo and main navigation */}
                     <div className="flex items-center">
-                        <Link to="/" className="flex-shrink-0 flex items-center">
-                            <span className="text-primary text-xl font-bold">Etkinlik Yönetimi</span>
+                        <Link to="/" className="flex-shrink-0 flex items-center group">
+                            <div className="relative">
+                                <SparklesIcon className="h-8 w-8 text-primary-600 dark:text-primary-400 group-hover:scale-110 transition-transform duration-300" />
+                                <div className="absolute inset-0 bg-primary-600 dark:bg-primary-400 opacity-20 blur-lg group-hover:opacity-40 transition-opacity duration-300" />
+                            </div>
+                            <span className="ml-3 text-xl font-bold gradient-text group-hover:scale-105 transition-transform duration-300">
+                                Etkinlik Hub
+                            </span>
                         </Link>
-                        <div className="hidden sm:ml-6 sm:flex sm:space-x-1">
-                            <NavLink
-                                to="/"
-                                className={({ isActive }) =>
-                                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-600 hover:text-primary hover:bg-neutral-100'}`
-                                }
-                            >
+
+                        {/* Desktop navigation */}
+                        <div className="hidden sm:ml-8 sm:flex sm:space-x-2">
+                            <NavLink to="/" className={navLinkClass}>
                                 Ana Sayfa
                             </NavLink>
-                            <NavLink
-                                to="/etkinlikler"
-                                className={({ isActive }) =>
-                                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-600 hover:text-primary hover:bg-neutral-100'}`
-                                }
-                            >
+                            <NavLink to="/etkinlikler" className={navLinkClass}>
                                 Etkinlikler
                             </NavLink>
-                            <NavLink
-                                to="/odalar"
-                                className={({ isActive }) =>
-                                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-600 hover:text-primary hover:bg-neutral-100'}`
-                                }
-                            >
+                            <NavLink to="/odalar" className={navLinkClass}>
                                 Odalar
                             </NavLink>
-                            <NavLink
-                                to="/oneriler"
-                                className={({ isActive }) =>
-                                    `relative px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-600 hover:text-primary hover:bg-neutral-100'}`
-                                }
-                            >
-                                Öneriler
-                                {suggestionCount > 0 && (
-                                    <span className="absolute top-1 right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
-                                        {suggestionCount}
-                                    </span>
-                                )}
-                            </NavLink>
-                            <NavLink
-                                to="/arkadaslar"
-                                className={({ isActive }) =>
-                                    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-600 hover:text-primary hover:bg-neutral-100'}`
-                                }
-                            >
-                                Arkadaşlar
-                            </NavLink>
+                            {user && (
+                                <>
+                                    <NavLink to="/oneriler" className={navLinkClass}>
+                                        <div className="flex items-center space-x-1">
+                                            <span>Öneriler</span>
+                                            {suggestionCount > 0 && (
+                                                <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-gradient-to-r from-accent-500 to-accent-600 rounded-full shadow-lg animate-pulse">
+                                                    {suggestionCount}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </NavLink>
+                                    <NavLink to="/arkadaslar" className={navLinkClass}>
+                                        Arkadaşlar
+                                    </NavLink>
+                                </>
+                            )}
                         </div>
                     </div>
-                    <div className="hidden sm:ml-6 sm:flex sm:items-center">
+
+                    {/* Right side actions */}
+                    <div className="hidden sm:ml-6 sm:flex sm:items-center sm:space-x-4">
+                        {/* Theme toggle */}
+                        <ThemeToggle size="sm" />
+
                         {user ? (
-                            <div className="ml-3 relative flex items-center space-x-4">
+                            <>
+                                {/* Notifications */}
                                 <div className="relative">
                                     <button
                                         type="button"
                                         onClick={() => {
                                             setIsNotificationMenuOpen(!isNotificationMenuOpen);
                                             setIsProfileMenuOpen(false);
+                                            setIsConversationsMenuOpen(false);
                                         }}
-                                        className="relative p-1 rounded-full text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                        className="relative p-2.5 rounded-xl text-neutral-600 dark:text-neutral-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-neutral-100 dark:hover:bg-dark-700/50 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200"
                                     >
-                                        <span className="sr-only">View notifications</span>
                                         <BellIcon className="h-6 w-6" aria-hidden="true" />
                                         {unreadNotificationCount > 0 && (
-                                            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                            <span className="absolute -top-1 -right-1 flex h-5 w-5">
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                                                <span className="relative inline-flex rounded-full h-5 w-5 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs items-center justify-center font-bold">
+                                                    {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                                                </span>
                                             </span>
                                         )}
                                     </button>
                                     {isNotificationMenuOpen && <NotificationDropdown />}
                                 </div>
+
+                                {/* Messages */}
                                 <div className="relative">
                                     <button
-                                        onClick={() => setIsConversationsMenuOpen(prev => !prev)}
-                                        className="relative p-1 rounded-full text-gray-500 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                        <span className="sr-only">View conversations</span>
+                                        onClick={() => {
+                                            setIsConversationsMenuOpen(!isConversationsMenuOpen);
+                                            setIsProfileMenuOpen(false);
+                                            setIsNotificationMenuOpen(false);
+                                        }}
+                                        className="relative p-2.5 rounded-xl text-neutral-600 dark:text-neutral-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-neutral-100 dark:hover:bg-dark-700/50 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200"
+                                    >
                                         <ChatBubbleLeftEllipsisIcon className="h-6 w-6" aria-hidden="true" />
                                         {unreadMessagesCount > 0 && (
-                                            <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-red-500 rounded-full min-w-[1.25rem] h-5">
+                                            <span className="absolute -top-1 -right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-gradient-to-r from-blue-500 to-blue-600 rounded-full min-w-[1.25rem] h-5 shadow-lg">
                                                 {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
                                             </span>
                                         )}
                                     </button>
                                     {isConversationsMenuOpen && (
-                                        <div className="origin-top-right absolute right-0 mt-2 w-80 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
-                                            <div className="px-4 py-3 border-b">
-                                                <p className="text-sm font-medium text-gray-900">Sohbetler</p>
+                                        <div className="origin-top-right absolute right-0 mt-2 w-80 rounded-2xl shadow-2xl bg-white/95 dark:bg-dark-800/95 backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10 focus:outline-none z-20 border border-neutral-200/50 dark:border-dark-700/50">
+                                            <div className="px-4 py-3 border-b border-neutral-200/50 dark:border-dark-700/50 bg-gradient-to-r from-neutral-50/50 to-transparent dark:from-dark-700/50">
+                                                <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Sohbetler</p>
                                             </div>
                                             <ConversationsList onClose={() => setIsConversationsMenuOpen(false)} />
-                                            <div className="px-4 py-2 border-t">
-                                                <Link to="/odalar" onClick={() => setIsConversationsMenuOpen(false)} className="text-sm font-medium text-blue-600 hover:text-blue-800">Tüm odaları gör</Link>
+                                            <div className="px-4 py-3 border-t border-neutral-200/50 dark:border-dark-700/50">
+                                                <Link
+                                                    to="/odalar"
+                                                    onClick={() => setIsConversationsMenuOpen(false)}
+                                                    className="text-sm font-medium text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 transition-colors duration-200"
+                                                >
+                                                    Tüm odaları gör →
+                                                </Link>
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                                <div>
+
+                                {/* Profile dropdown */}
+                                <div className="relative">
                                     <button
-                                        onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                                        className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                                        onClick={() => {
+                                            setIsProfileMenuOpen(!isProfileMenuOpen);
+                                            setIsConversationsMenuOpen(false);
+                                            setIsNotificationMenuOpen(false);
+                                        }}
+                                        className="flex items-center text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 hover:bg-neutral-100 dark:hover:bg-dark-700/50 p-2 transition-all duration-200"
                                     >
-                                        <div className="h-8 w-8 rounded-full bg-primary-light flex items-center justify-center">
-                                            <UserIcon className="h-5 w-5 text-primary" />
+                                        <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center shadow-lg">
+                                            <UserIcon className="h-5 w-5 text-white" />
                                         </div>
-                                        <span className="ml-2 text-neutral-700 font-medium hidden md:block">{user.first_name}</span>
+                                        <span className="ml-2 text-neutral-700 dark:text-neutral-200 font-medium hidden md:block">
+                                            {user.first_name}
+                                        </span>
                                     </button>
-                                </div>
-                                {isProfileMenuOpen && (
-                                    <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg py-1 bg-bg-surface ring-1 ring-neutral-200 focus:outline-none z-20">
-                                        <div className="px-4 py-3">
-                                            <p className="text-sm text-neutral-700">Giriş yapıldı:</p>
-                                            <p className="text-sm font-medium text-neutral-900 truncate">{user.email}</p>
+
+                                    {isProfileMenuOpen && (
+                                        <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-2xl shadow-2xl py-1 bg-white/95 dark:bg-dark-800/95 backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/10 focus:outline-none z-20 border border-neutral-200/50 dark:border-dark-700/50">
+                                            <div className="px-4 py-3 border-b border-neutral-200/50 dark:border-dark-700/50">
+                                                <p className="text-sm text-neutral-600 dark:text-neutral-400">Giriş yapıldı:</p>
+                                                <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">{user.email}</p>
+                                            </div>
+                                            <NavLink
+                                                to="/profil"
+                                                className={({ isActive }) => `block px-4 py-3 text-sm transition-colors duration-200 ${isActive ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400' : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-dark-700/50 hover:text-primary-600 dark:hover:text-primary-400'}`}
+                                                onClick={() => setIsProfileMenuOpen(false)}
+                                            >
+                                                Profilim
+                                            </NavLink>
+                                            <button
+                                                onClick={handleLogout}
+                                                className="block w-full text-left px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-dark-700/50 hover:text-red-600 dark:hover:text-red-400 transition-colors duration-200"
+                                            >
+                                                Çıkış Yap
+                                            </button>
                                         </div>
-                                        <NavLink to="/profil" className={({ isActive }) => `block px-4 py-2 text-sm ${isActive ? 'bg-neutral-100 text-primary' : 'text-neutral-700'} hover:bg-neutral-100 hover:text-primary`} onClick={() => setIsProfileMenuOpen(false)}>
-                                            Profilim
-                                        </NavLink>
-                                        <button
-                                            onClick={handleLogout}
-                                            className="block w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100 hover:text-primary"
-                                        >
-                                            Çıkış Yap
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                </div>
+                            </>
                         ) : (
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-3">
                                 <Button variant="ghost" size="medium" onClick={() => navigate('/giris')}>
                                     Giriş Yap
                                 </Button>
-                                <Button variant="primary" size="medium" onClick={() => navigate('/kayit')}>
+                                <Button variant="gradient" size="medium" onClick={() => navigate('/kayit')}>
                                     Kayıt Ol
                                 </Button>
                             </div>
                         )}
                     </div>
-                    <div className="-mr-2 flex items-center sm:hidden">
+
+                    {/* Mobile menu button */}
+                    <div className="flex items-center space-x-2 sm:hidden">
+                        <ThemeToggle size="sm" />
                         <button
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
-                            className="inline-flex items-center justify-center p-2 rounded-md text-neutral-500 hover:text-primary hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary"
+                            className="inline-flex items-center justify-center p-2 rounded-xl text-neutral-600 dark:text-neutral-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-neutral-100 dark:hover:bg-dark-700/50 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all duration-200"
                         >
                             <span className="sr-only">Ana menüyü aç</span>
                             {isMenuOpen ? (
@@ -192,65 +231,79 @@ const Navbar: React.FC<NavbarProps> = ({ user, onLogout }) => {
                 </div>
             </div>
 
-            {/* Mobil menü */}
+            {/* Mobile menu */}
             {isMenuOpen && (
-                <div className="sm:hidden border-t border-neutral-200 bg-bg-surface shadow-md">
-                    <div className="px-2 pt-2 pb-3 space-y-1">
-                        <NavLink to="/" className={({ isActive }) => `block px-3 py-2 rounded-md text-base font-medium ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-700 hover:text-primary hover:bg-neutral-100'}`} onClick={() => setIsMenuOpen(false)}>
+                <div className="sm:hidden border-t border-neutral-200/50 dark:border-dark-700/50 bg-white/95 dark:bg-dark-900/95 backdrop-blur-xl">
+                    <div className="px-4 pt-4 pb-6 space-y-2">
+                        <NavLink to="/" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
                             Ana Sayfa
                         </NavLink>
-                        <NavLink to="/etkinlikler" className={({ isActive }) => `block px-3 py-2 rounded-md text-base font-medium ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-700 hover:text-primary hover:bg-neutral-100'}`} onClick={() => setIsMenuOpen(false)}>
+                        <NavLink to="/etkinlikler" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
                             Etkinlikler
                         </NavLink>
-                        <NavLink to="/odalar" className={({ isActive }) => `block px-3 py-2 rounded-md text-base font-medium ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-700 hover:text-primary hover:bg-neutral-100'}`} onClick={() => setIsMenuOpen(false)}>
+                        <NavLink to="/odalar" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
                             Odalar
                         </NavLink>
-                        <NavLink to="/oneriler" className={({ isActive }) => `relative block px-3 py-2 rounded-md text-base font-medium ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-700 hover:text-primary hover:bg-neutral-100'}`} onClick={() => setIsMenuOpen(false)}>
-                            Öneriler
-                            {suggestionCount > 0 && (
-                                <span className="absolute top-1 right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
-                                    {suggestionCount}
-                                </span>
-                            )}
-                        </NavLink>
-                        <NavLink to="/arkadaslar" className={({ isActive }) => `block px-3 py-2 rounded-md text-base font-medium ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-700 hover:text-primary hover:bg-neutral-100'}`} onClick={() => setIsMenuOpen(false)}>
-                            Arkadaşlar
-                        </NavLink>
-                    </div>
-                    <div className="pt-4 pb-3 border-t border-neutral-300">
-                        {user ? (
+                        {user && (
                             <>
-                                <div className="flex items-center px-5 mb-3">
-                                    <div className="flex-shrink-0">
-                                        <div className="h-10 w-10 rounded-full bg-primary-light flex items-center justify-center">
-                                            <UserIcon className="h-6 w-6 text-primary" />
-                                        </div>
+                                <NavLink to="/oneriler" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
+                                    <div className="flex items-center space-x-2">
+                                        <span>Öneriler</span>
+                                        {suggestionCount > 0 && (
+                                            <span className="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-gradient-to-r from-accent-500 to-accent-600 rounded-full">
+                                                {suggestionCount}
+                                            </span>
+                                        )}
                                     </div>
-                                    <div className="ml-3">
-                                        <div className="text-base font-medium text-neutral-800">{user.first_name} {user.last_name}</div>
-                                        <div className="text-sm font-medium text-neutral-500">{user.email}</div>
-                                    </div>
-                                </div>
-                                <div className="px-2 space-y-1">
-                                    <NavLink to="/profil" className={({ isActive }) => `block px-3 py-2 rounded-md text-base font-medium ${isActive ? 'text-primary bg-primary-light' : 'text-neutral-700 hover:text-primary hover:bg-neutral-100'}`} onClick={() => setIsMenuOpen(false)}>
-                                        Profilim
-                                    </NavLink>
-                                    <button
-                                        onClick={() => { handleLogout(); setIsMenuOpen(false); }}
-                                        className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-neutral-700 hover:text-primary hover:bg-neutral-100"
-                                    >
-                                        Çıkış Yap
-                                    </button>
-                                </div>
+                                </NavLink>
+                                <NavLink to="/arkadaslar" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
+                                    Arkadaşlar
+                                </NavLink>
+                                <NavLink to="/profil" className={mobileNavLinkClass} onClick={() => setIsMenuOpen(false)}>
+                                    Profil
+                                </NavLink>
                             </>
-                        ) : (
-                            <div className="px-5 py-2 space-y-3">
-                                <Button variant="ghost" size="medium" className="w-full" onClick={() => { navigate('/giris'); setIsMenuOpen(false); }}>
+                        )}
+
+                        {/* Mobile auth section */}
+                        {!user && (
+                            <div className="pt-4 space-y-2">
+                                <Button
+                                    variant="ghost"
+                                    size="medium"
+                                    className="w-full"
+                                    onClick={() => {
+                                        navigate('/giris');
+                                        setIsMenuOpen(false);
+                                    }}
+                                >
                                     Giriş Yap
                                 </Button>
-                                <Button variant="primary" size="medium" className="w-full" onClick={() => { navigate('/kayit'); setIsMenuOpen(false); }}>
+                                <Button
+                                    variant="gradient"
+                                    size="medium"
+                                    className="w-full"
+                                    onClick={() => {
+                                        navigate('/kayit');
+                                        setIsMenuOpen(false);
+                                    }}
+                                >
                                     Kayıt Ol
                                 </Button>
+                            </div>
+                        )}
+
+                        {user && (
+                            <div className="pt-4 border-t border-neutral-200/50 dark:border-dark-700/50">
+                                <button
+                                    onClick={() => {
+                                        handleLogout();
+                                        setIsMenuOpen(false);
+                                    }}
+                                    className="block w-full text-left px-4 py-3 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors duration-200"
+                                >
+                                    Çıkış Yap
+                                </button>
                             </div>
                         )}
                     </div>
