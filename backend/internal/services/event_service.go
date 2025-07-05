@@ -675,7 +675,7 @@ func (s *EventService) InviteUserToEvent(eventID, inviterID, inviteeID uint64) (
 
 	// Bildirim oluştur
 	notificationService := NewNotificationService()
-	_, err := notificationService.CreateNotification(inviteeID, "event_invitation", fmt.Sprintf("Etkinliğe davet edildiniz: %s", event.Title), &event.ID)
+	_, err := notificationService.CreateNotification(inviteeID, "event_invitation", fmt.Sprintf("Etkinliğe davet edildiniz: %s", event.Title), &invitation.ID)
 	if err != nil {
 		log.Printf("Davet gönderildi ama bildirim oluşturulamadı: %v", err)
 		// Bu hatayı yukarıya fırlatmak yerine sadece loglayabiliriz. Davet işlemi başarılı oldu.
@@ -704,4 +704,120 @@ func (s *EventService) GetEventsForFeed(userID uint64) ([]models.Event, error) {
 
 	err := query.Find(&events).Error
 	return events, err
+}
+
+// AcceptEventInvitation kullanıcının etkinlik davetini kabul eder.
+func (s *EventService) AcceptEventInvitation(invitationID uint64, userID uint64) error {
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Daveti bul ve kontrol et
+	var invitation models.EventInvitation
+	if err := tx.Preload("Event").First(&invitation, invitationID).Error; err != nil {
+		tx.Rollback()
+		return errors.New("davet bulunamadı")
+	}
+
+	// Davet edilen kullanıcının kendisi olduğunu doğrula
+	if invitation.InviteeID != userID {
+		tx.Rollback()
+		return errors.New("bu daveti kabul etme yetkiniz yok")
+	}
+
+	// Davet durumu pending olmalı
+	if invitation.Status != models.InvitationPending {
+		tx.Rollback()
+		return errors.New("bu davet zaten işlem görmüş")
+	}
+
+	// Davet durumunu güncelle
+	invitation.Status = models.InvitationAccepted
+	if err := tx.Save(&invitation).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Kullanıcıyı etkinliğe katılımcı olarak ekle
+	attendance := models.EventAttendance{
+		EventID:  invitation.EventID,
+		UserID:   userID,
+		Status:   models.AttendanceAttending,
+		JoinedAt: time.Now(),
+	}
+	if err := tx.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "event_id"}, {Name: "user_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"status", "joined_at"}),
+	}).Create(&attendance).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Etkinlik sahibine bildirim gönder
+	notificationService := NewNotificationService()
+	_, err := notificationService.CreateNotification(
+		invitation.Event.CreatorUserID,
+		"event_invitation_accepted",
+		fmt.Sprintf("%s kullanıcısı '%s' etkinliğine katıldı", invitation.Invitee.FirstName, invitation.Event.Title),
+		&invitation.EventID,
+	)
+	if err != nil {
+		log.Printf("Kabul bildirimi gönderilemedi: %v", err)
+	}
+
+	return tx.Commit().Error
+}
+
+// DeclineEventInvitation kullanıcının etkinlik davetini reddeder.
+func (s *EventService) DeclineEventInvitation(invitationID uint64, userID uint64) error {
+	// Daveti bul ve kontrol et
+	var invitation models.EventInvitation
+	if err := s.db.Preload("Event").First(&invitation, invitationID).Error; err != nil {
+		return errors.New("davet bulunamadı")
+	}
+
+	// Davet edilen kullanıcının kendisi olduğunu doğrula
+	if invitation.InviteeID != userID {
+		return errors.New("bu daveti reddetme yetkiniz yok")
+	}
+
+	// Davet durumu pending olmalı
+	if invitation.Status != models.InvitationPending {
+		return errors.New("bu davet zaten işlem görmüş")
+	}
+
+	// Davet durumunu güncelle
+	invitation.Status = models.InvitationDeclined
+	if err := s.db.Save(&invitation).Error; err != nil {
+		return err
+	}
+
+	// Etkinlik sahibine bildirim gönder
+	notificationService := NewNotificationService()
+	_, err := notificationService.CreateNotification(
+		invitation.Event.CreatorUserID,
+		"event_invitation_declined",
+		fmt.Sprintf("%s kullanıcısı '%s' etkinliğine daveti reddetti", invitation.Invitee.FirstName, invitation.Event.Title),
+		&invitation.EventID,
+	)
+	if err != nil {
+		log.Printf("Red bildirimi gönderilemedi: %v", err)
+	}
+
+	return nil
+}
+
+// GetUserEventInvitations kullanıcının etkinlik davetlerini getirir.
+func (s *EventService) GetUserEventInvitations(userID uint64) ([]models.EventInvitation, error) {
+	var invitations []models.EventInvitation
+	if err := s.db.Preload("Event").Preload("Inviter").
+		Where("invitee_id = ? AND status = ?", userID, models.InvitationPending).
+		Order("created_at desc").
+		Find(&invitations).Error; err != nil {
+		return nil, err
+	}
+	return invitations, nil
 }

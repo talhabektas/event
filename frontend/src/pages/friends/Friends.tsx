@@ -1,20 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
-    UserPlusIcon,
-    MagnifyingGlassIcon,
-    UserGroupIcon,
+    UserIcon,
     EnvelopeIcon,
+    UserPlusIcon,
+    UserGroupIcon,
     CheckIcon,
     XMarkIcon,
-    UserIcon,
-    ChatBubbleLeftEllipsisIcon
+    MagnifyingGlassIcon,
+    ChatBubbleLeftEllipsisIcon,
+    ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
-import apiService from '../../services/apiService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useApp } from '../../contexts/AppContext';
+import { apiService } from '../../services';
+import { Card, Button } from '../../components/common';
 
-// Backend'den gelen User modeliyle eşleşen tip
+// Types
 interface User {
     id: number;
     username: string;
@@ -24,7 +26,6 @@ interface User {
     email?: string;
 }
 
-// Backend Friendship modeli ile uyumlu tip
 interface FriendRequest {
     id: number; // Friendship ID
     requester_id: number;
@@ -32,11 +33,10 @@ interface FriendRequest {
     status: string;
     created_at: string;
     updated_at: string;
-    requester: User; // Preload edilmiş requester
-    addressee: User; // Preload edilmiş addressee
+    requester?: User; // Optional - may not be preloaded
+    addressee?: User; // Optional - may not be preloaded
 }
 
-// Backend FriendSuggestion modeli ile uyumlu tip
 interface FriendSuggestion {
     user: User;
     match_score: number;
@@ -48,14 +48,15 @@ interface SuggestedUserState extends User {
 }
 
 const Friends: React.FC = () => {
+    const { user: currentUser } = useAuth();
+    const { addNotification } = useApp();
+
+    const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'suggestions'>('friends');
     const [friends, setFriends] = useState<User[]>([]);
     const [requests, setRequests] = useState<FriendRequest[]>([]);
     const [suggestions, setSuggestions] = useState<SuggestedUserState[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'suggestions'>('friends');
     const [isLoading, setIsLoading] = useState(true);
-    const { user: currentUser } = useAuth();
-    const { addNotification } = useApp();
+    const [searchQuery, setSearchQuery] = useState('');
 
     const fetchAllData = useCallback(async () => {
         setIsLoading(true);
@@ -71,7 +72,22 @@ const Friends: React.FC = () => {
             console.log('[fetchAllData] Bekleyen istekler isteniyor...');
             const requestsResponse = await apiService.get<FriendRequest[]>('/api/friendships/requests/pending');
             console.log('[fetchAllData] Bekleyen istekler alındı:', requestsResponse);
-            setRequests(requestsResponse || []);
+
+            // Null check ve data validation
+            const validRequests = (requestsResponse || []).filter((request): request is FriendRequest => {
+                const isValid = Boolean(request && typeof request === 'object' &&
+                    typeof request.id === 'number' &&
+                    request.requester &&
+                    typeof request.requester === 'object' &&
+                    typeof request.requester.id === 'number');
+
+                if (!isValid) {
+                    console.warn('[fetchAllData] Invalid request object:', request);
+                }
+                return isValid;
+            });
+
+            setRequests(validRequests);
 
             // Arkadaş önerileri - backend'de doğru endpoint
             console.log('[fetchAllData] Öneriler isteniyor...');
@@ -79,7 +95,7 @@ const Friends: React.FC = () => {
             console.log('[fetchAllData] Öneriler alındı:', suggestionsResponse);
             const suggestedUsers = (suggestionsResponse || []).map((suggestion) => ({
                 ...suggestion.user,
-                requestStatus: 'idle' as 'idle',
+                requestStatus: 'idle' as const,
             }));
             setSuggestions(suggestedUsers);
             console.log('[fetchAllData] Başarıyla tamamlandı.');
@@ -105,7 +121,6 @@ const Friends: React.FC = () => {
 
     const handleAcceptRequest = async (friendshipId: number) => {
         try {
-            // Backend'de doğru endpoint
             await apiService.post(`/api/friendships/requests/${friendshipId}/accept`);
             addNotification({ type: 'success', message: 'Arkadaşlık isteği kabul edildi.' });
             fetchAllData(); // Verileri yeniden yükle
@@ -117,7 +132,6 @@ const Friends: React.FC = () => {
 
     const handleRejectRequest = async (friendshipId: number) => {
         try {
-            // Backend'de doğru endpoint
             await apiService.post(`/api/friendships/requests/${friendshipId}/decline`);
             addNotification({ type: 'info', message: 'Arkadaşlık isteği reddedildi.' });
             fetchAllData(); // Verileri yeniden yükle
@@ -130,7 +144,6 @@ const Friends: React.FC = () => {
     const handleAddFriend = async (userId: number) => {
         setSuggestions(prev => prev.map(s => s.id === userId ? { ...s, requestStatus: 'pending' } : s));
         try {
-            // Backend'de doğru endpoint ve payload formatı
             await apiService.post('/api/friendships/request', { addressee_id: userId });
             setSuggestions(prev => prev.map(s => s.id === userId ? { ...s, requestStatus: 'sent' } : s));
             addNotification({ type: 'success', message: 'Arkadaşlık isteği gönderildi.' });
@@ -146,12 +159,10 @@ const Friends: React.FC = () => {
         if (!searchQuery.trim()) return;
         try {
             setIsLoading(true);
-            // Backend user search endpoint'i
             const response = await apiService.get<User[]>(`/api/users/search?q=${encodeURIComponent(searchQuery)}`);
             const searchResults = response || [];
 
-            // Arama sonuçlarını suggestions olarak göster
-            setSuggestions(searchResults.map(u => ({ ...u, requestStatus: 'idle' })) || []);
+            setSuggestions(searchResults.map(u => ({ ...u, requestStatus: 'idle' as const })) || []);
             setActiveTab('suggestions');
         } catch (error) {
             console.error('Arama yapılırken hata:', error);
@@ -165,12 +176,16 @@ const Friends: React.FC = () => {
         `${friend.first_name || ''} ${friend.last_name || ''} ${friend.username}`.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const getUserDisplayName = (user: User) => {
+    const getUserDisplayName = (user?: User | null) => {
+        if (!user) return 'Bilinmeyen Kullanıcı';
         const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
-        return fullName || user.username;
+        return fullName || user.username || 'Anonim';
     };
 
-    const getUserAvatarUrl = (user: User) => {
+    const getUserAvatarUrl = (user?: User | null) => {
+        if (!user) {
+            return `https://ui-avatars.com/api/?name=?&background=random`;
+        }
         if (user.profile_picture_url) {
             return user.profile_picture_url;
         }
@@ -181,39 +196,63 @@ const Friends: React.FC = () => {
     const renderFriendsTab = () => (
         <div>
             {isLoading ? (
-                <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="mt-2 text-sm text-gray-500">Arkadaşlar yükleniyor...</p>
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+                    <p className="mt-4 text-neutral-600 dark:text-neutral-400">Arkadaşlar yükleniyor...</p>
                 </div>
             ) : filteredFriends.length === 0 ? (
-                <div className="text-center py-8">
-                    <UserIcon className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">Arkadaş bulunamadı</h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                        {searchQuery ? 'Aramanıza uygun arkadaş bulunamadı.' : 'Henüz arkadaşınız bulunmamaktadır.'}
+                <div className="text-center py-12">
+                    <UserIcon className="mx-auto h-16 w-16 text-neutral-400 dark:text-neutral-500" />
+                    <h3 className="mt-4 text-lg font-medium text-neutral-900 dark:text-neutral-100">
+                        {searchQuery ? 'Arkadaş bulunamadı' : 'Henüz arkadaşınız yok'}
+                    </h3>
+                    <p className="mt-2 text-neutral-600 dark:text-neutral-400">
+                        {searchQuery
+                            ? 'Aramanıza uygun arkadaş bulunamadı.'
+                            : 'Yeni insanlarla tanışarak arkadaş çevrenizi genişletebilirsiniz.'
+                        }
                     </p>
+                    {!searchQuery && (
+                        <Button
+                            variant="primary"
+                            size="medium"
+                            className="mt-4"
+                            onClick={() => setActiveTab('suggestions')}
+                        >
+                            Arkadaş Önerilerini Gör
+                        </Button>
+                    )}
                 </div>
             ) : (
-                <ul className="divide-y divide-gray-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredFriends.map((friend) => (
-                        <li key={friend.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
-                            <Link to={`/profil/${friend.id}`} className="flex items-center space-x-4">
+                        <Card key={friend.id} variant="glass" className="hover-lift">
+                            <div className="p-6 text-center">
                                 <img
-                                    className="h-12 w-12 rounded-full object-cover"
+                                    className="h-16 w-16 rounded-full object-cover mx-auto mb-4"
                                     src={getUserAvatarUrl(friend)}
                                     alt={getUserDisplayName(friend)}
                                 />
-                                <div>
-                                    <p className="text-sm font-medium text-gray-900">{getUserDisplayName(friend)}</p>
-                                    <p className="text-sm text-gray-500">@{friend.username}</p>
+                                <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+                                    {getUserDisplayName(friend)}
+                                </h3>
+                                <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                                    @{friend.username}
+                                </p>
+                                <div className="flex space-x-2">
+                                    <Link to={`/profil/${friend.id}`} className="flex-1">
+                                        <Button variant="outline" size="small" className="w-full">
+                                            Profili Gör
+                                        </Button>
+                                    </Link>
+                                    <Button variant="ghost" size="small" className="px-3">
+                                        <ChatBubbleLeftEllipsisIcon className="h-4 w-4" />
+                                    </Button>
                                 </div>
-                            </Link>
-                            <button className="p-2 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-600">
-                                <ChatBubbleLeftEllipsisIcon className="h-6 w-6" />
-                            </button>
-                        </li>
+                            </div>
+                        </Card>
                     ))}
-                </ul>
+                </div>
             )}
         </div>
     );
@@ -221,51 +260,94 @@ const Friends: React.FC = () => {
     const renderRequestsTab = () => (
         <div>
             {isLoading ? (
-                <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="mt-2 text-sm text-gray-500">İstekler yükleniyor...</p>
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+                    <p className="mt-4 text-neutral-600 dark:text-neutral-400">İstekler yükleniyor...</p>
                 </div>
             ) : requests.length === 0 ? (
-                <div className="text-center py-8">
-                    <EnvelopeIcon className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">Bekleyen istek yok</h3>
-                    <p className="mt-1 text-sm text-gray-500">Yeni arkadaşlık isteğiniz bulunmamaktadır.</p>
+                <div className="text-center py-12">
+                    <EnvelopeIcon className="mx-auto h-16 w-16 text-neutral-400 dark:text-neutral-500" />
+                    <h3 className="mt-4 text-lg font-medium text-neutral-900 dark:text-neutral-100">Bekleyen istek yok</h3>
+                    <p className="mt-2 text-neutral-600 dark:text-neutral-400">Yeni arkadaşlık isteğiniz bulunmamaktadır.</p>
                 </div>
             ) : (
-                <ul className="divide-y divide-gray-200">
-                    {requests.map((request) => (
-                        <li key={request.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
-                            <Link to={`/profil/${request.requester.id}`} className="flex items-center space-x-4">
-                                <img
-                                    className="h-12 w-12 rounded-full object-cover"
-                                    src={getUserAvatarUrl(request.requester)}
-                                    alt={getUserDisplayName(request.requester)}
-                                />
-                                <div>
-                                    <p className="text-sm font-medium text-gray-900">{getUserDisplayName(request.requester)}</p>
-                                    <p className="text-sm text-gray-500">@{request.requester.username}</p>
-                                    <p className="text-xs text-gray-400">
-                                        {new Date(request.created_at).toLocaleDateString('tr-TR')}
-                                    </p>
+                <div className="space-y-4">
+                    {requests.map((request) => {
+                        // Safe access with null checks
+                        const requester = request.requester;
+                        const requesterId = requester?.id;
+                        const requesterName = getUserDisplayName(requester);
+                        const requesterUsername = requester?.username || 'unknown';
+
+                        if (!requester || !requesterId) {
+                            return (
+                                <Card key={request.id} variant="default" className="border-orange-200 dark:border-orange-800">
+                                    <div className="p-6 flex items-center space-x-4">
+                                        <ExclamationTriangleIcon className="h-12 w-12 text-orange-500" />
+                                        <div className="flex-1">
+                                            <p className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                                                Hatalı arkadaşlık isteği
+                                            </p>
+                                            <p className="text-xs text-orange-600 dark:text-orange-400">
+                                                Bu istek için kullanıcı bilgileri bulunamadı.
+                                            </p>
+                                        </div>
+                                        <Button
+                                            variant="danger"
+                                            size="small"
+                                            onClick={() => handleRejectRequest(request.id)}
+                                        >
+                                            Sil
+                                        </Button>
+                                    </div>
+                                </Card>
+                            );
+                        }
+
+                        return (
+                            <Card key={request.id} variant="glass" className="hover-lift">
+                                <div className="p-6 flex items-center justify-between">
+                                    <Link to={`/profil/${requesterId}`} className="flex items-center space-x-4 flex-1">
+                                        <img
+                                            className="h-14 w-14 rounded-full object-cover"
+                                            src={getUserAvatarUrl(requester)}
+                                            alt={requesterName}
+                                        />
+                                        <div className="flex-1">
+                                            <p className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+                                                {requesterName}
+                                            </p>
+                                            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                                                @{requesterUsername}
+                                            </p>
+                                            <p className="text-xs text-neutral-500 dark:text-neutral-500 mt-1">
+                                                {new Date(request.created_at).toLocaleDateString('tr-TR')}
+                                            </p>
+                                        </div>
+                                    </Link>
+                                    <div className="flex space-x-3">
+                                        <Button
+                                            variant="success"
+                                            size="small"
+                                            onClick={() => handleAcceptRequest(request.id)}
+                                            iconLeft={<CheckIcon className="h-4 w-4" />}
+                                        >
+                                            Kabul Et
+                                        </Button>
+                                        <Button
+                                            variant="danger"
+                                            size="small"
+                                            onClick={() => handleRejectRequest(request.id)}
+                                            iconLeft={<XMarkIcon className="h-4 w-4" />}
+                                        >
+                                            Reddet
+                                        </Button>
+                                    </div>
                                 </div>
-                            </Link>
-                            <div className="flex space-x-2">
-                                <button
-                                    onClick={() => handleAcceptRequest(request.id)}
-                                    className="p-2 rounded-full bg-green-100 text-green-600 hover:bg-green-200"
-                                >
-                                    <CheckIcon className="h-5 w-5" />
-                                </button>
-                                <button
-                                    onClick={() => handleRejectRequest(request.id)}
-                                    className="p-2 rounded-full bg-red-100 text-red-600 hover:bg-red-200"
-                                >
-                                    <XMarkIcon className="h-5 w-5" />
-                                </button>
-                            </div>
-                        </li>
-                    ))}
-                </ul>
+                            </Card>
+                        );
+                    })}
+                </div>
             )}
         </div>
     );
@@ -273,123 +355,145 @@ const Friends: React.FC = () => {
     const renderSuggestionsTab = () => (
         <div>
             {isLoading ? (
-                <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-                    <p className="mt-2 text-sm text-gray-500">Öneriler yükleniyor...</p>
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+                    <p className="mt-4 text-neutral-600 dark:text-neutral-400">Öneriler yükleniyor...</p>
                 </div>
             ) : suggestions.length === 0 ? (
-                <div className="text-center py-8">
-                    <UserGroupIcon className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">Öneri bulunamadı</h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                        {searchQuery ? 'Aramanıza uygun kullanıcı bulunamadı.' : 'Şu anda yeni arkadaş öneriniz bulunmamaktadır.'}
+                <div className="text-center py-12">
+                    <UserGroupIcon className="mx-auto h-16 w-16 text-neutral-400 dark:text-neutral-500" />
+                    <h3 className="mt-4 text-lg font-medium text-neutral-900 dark:text-neutral-100">
+                        {searchQuery ? 'Kullanıcı bulunamadı' : 'Öneri bulunamadı'}
+                    </h3>
+                    <p className="mt-2 text-neutral-600 dark:text-neutral-400">
+                        {searchQuery
+                            ? 'Aramanıza uygun kullanıcı bulunamadı.'
+                            : 'Şu anda yeni arkadaş öneriniz bulunmamaktadır.'
+                        }
                     </p>
                 </div>
             ) : (
-                <ul className="divide-y divide-gray-200">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     {suggestions.map((suggestion) => (
-                        <li key={suggestion.id} className="p-4 flex items-center justify-between hover:bg-gray-50">
-                            <Link to={`/profil/${suggestion.id}`} className="flex items-center space-x-4">
+                        <Card key={suggestion.id} variant="glass" className="hover-lift">
+                            <div className="p-6 text-center">
                                 <img
-                                    className="h-12 w-12 rounded-full object-cover"
+                                    className="h-16 w-16 rounded-full object-cover mx-auto mb-4"
                                     src={getUserAvatarUrl(suggestion)}
                                     alt={getUserDisplayName(suggestion)}
                                 />
-                                <div>
-                                    <p className="text-sm font-medium text-gray-900">{getUserDisplayName(suggestion)}</p>
-                                    <p className="text-sm text-gray-500">@{suggestion.username}</p>
+                                <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+                                    {getUserDisplayName(suggestion)}
+                                </h3>
+                                <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
+                                    @{suggestion.username}
+                                </p>
+                                <div className="flex space-x-2">
+                                    <Link to={`/profil/${suggestion.id}`} className="flex-1">
+                                        <Button variant="outline" size="small" className="w-full">
+                                            Profili Gör
+                                        </Button>
+                                    </Link>
+                                    <Button
+                                        variant={
+                                            suggestion.requestStatus === 'idle' ? 'primary' :
+                                                suggestion.requestStatus === 'pending' ? 'secondary' : 'success'
+                                        }
+                                        size="small"
+                                        disabled={Boolean(suggestion.requestStatus !== 'idle')}
+                                        onClick={() => handleAddFriend(suggestion.id)}
+                                        className="px-3"
+                                    >
+                                        {suggestion.requestStatus === 'idle' && <UserPlusIcon className="h-4 w-4" />}
+                                        {suggestion.requestStatus === 'pending' && (
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                                        )}
+                                        {suggestion.requestStatus === 'sent' && <CheckIcon className="h-4 w-4" />}
+                                    </Button>
                                 </div>
-                            </Link>
-                            <button
-                                onClick={() => handleAddFriend(suggestion.id)}
-                                disabled={suggestion.requestStatus !== 'idle'}
-                                className={`p-2 rounded-full ${suggestion.requestStatus === 'idle'
-                                        ? 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
-                                        : suggestion.requestStatus === 'pending'
-                                            ? 'bg-yellow-100 text-yellow-600'
-                                            : 'bg-green-100 text-green-600'
-                                    } disabled:cursor-not-allowed`}
-                            >
-                                {suggestion.requestStatus === 'idle' && <UserPlusIcon className="h-5 w-5" />}
-                                {suggestion.requestStatus === 'pending' && (
-                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-600"></div>
-                                )}
-                                {suggestion.requestStatus === 'sent' && <CheckIcon className="h-5 w-5" />}
-                            </button>
-                        </li>
+                            </div>
+                        </Card>
                     ))}
-                </ul>
+                </div>
             )}
         </div>
     );
 
     return (
-        <div className="max-w-4xl mx-auto p-6">
-            <div className="bg-white rounded-lg shadow-sm">
-                <div className="px-6 py-4 border-b border-gray-200">
-                    <h1 className="text-2xl font-bold text-gray-900">Arkadaşlar</h1>
-                </div>
-
-                {/* Arama Çubuğu */}
-                <div className="px-6 py-4 border-b border-gray-200">
-                    <form onSubmit={handleSearch} className="flex space-x-2">
-                        <div className="flex-1 relative">
-                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder="Kullanıcı ara..."
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-                            />
+        <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-neutral-100 to-neutral-200 dark:from-dark-900 dark:via-dark-800 dark:to-dark-950">
+            <div className="container mx-auto px-4 py-8">
+                {/* Header */}
+                <Card variant="gradient" className="mb-8">
+                    <div className="relative p-8">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl" />
+                        <div className="relative">
+                            <h1 className="text-3xl font-bold text-white mb-2">Arkadaşlar</h1>
+                            <p className="text-white/90">Arkadaşlarınızı yönetin, yeni insanlarla tanışın</p>
                         </div>
-                        <button
-                            type="submit"
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                            Ara
-                        </button>
-                    </form>
-                </div>
+                    </div>
+                </Card>
 
-                {/* Tab Navigation */}
-                <div className="px-6">
-                    <nav className="flex space-x-8">
-                        <button
-                            onClick={() => setActiveTab('friends')}
-                            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'friends'
-                                    ? 'border-indigo-500 text-indigo-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
-                        >
-                            <UserGroupIcon className="h-5 w-5 inline mr-2" />
-                            Arkadaşlarım ({friends.length})
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('requests')}
-                            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'requests'
-                                    ? 'border-indigo-500 text-indigo-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
-                        >
-                            <EnvelopeIcon className="h-5 w-5 inline mr-2" />
-                            İstekler ({requests.length})
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('suggestions')}
-                            className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'suggestions'
-                                    ? 'border-indigo-500 text-indigo-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
-                        >
-                            <UserPlusIcon className="h-5 w-5 inline mr-2" />
-                            Öneriler ({suggestions.length})
-                        </button>
-                    </nav>
-                </div>
+                {/* Search */}
+                <Card variant="glass" className="mb-8">
+                    <div className="p-6">
+                        <form onSubmit={handleSearch} className="flex space-x-4">
+                            <div className="flex-1 relative">
+                                <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-neutral-400" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Kullanıcı ara..."
+                                    className="input-modern w-full pl-12"
+                                />
+                            </div>
+                            <Button type="submit" variant="primary" size="medium">
+                                Ara
+                            </Button>
+                        </form>
+                    </div>
+                </Card>
 
-                {/* Tab Content */}
-                <div className="px-6 py-4">
+                {/* Tabs */}
+                <Card variant="glass" className="mb-8">
+                    <div className="p-2">
+                        <nav className="flex space-x-2">
+                            <button
+                                onClick={() => setActiveTab('friends')}
+                                className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'friends'
+                                    ? 'bg-primary-500 text-white shadow-lg'
+                                    : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-dark-700/50'
+                                    }`}
+                            >
+                                <UserGroupIcon className="h-5 w-5 inline mr-2" />
+                                Arkadaşlarım ({friends.length})
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('requests')}
+                                className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'requests'
+                                    ? 'bg-primary-500 text-white shadow-lg'
+                                    : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-dark-700/50'
+                                    }`}
+                            >
+                                <EnvelopeIcon className="h-5 w-5 inline mr-2" />
+                                İstekler ({requests.length})
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('suggestions')}
+                                className={`flex-1 py-3 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === 'suggestions'
+                                    ? 'bg-primary-500 text-white shadow-lg'
+                                    : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-dark-700/50'
+                                    }`}
+                            >
+                                <UserPlusIcon className="h-5 w-5 inline mr-2" />
+                                Öneriler ({suggestions.length})
+                            </button>
+                        </nav>
+                    </div>
+                </Card>
+
+                {/* Content */}
+                <div>
                     {activeTab === 'friends' && renderFriendsTab()}
                     {activeTab === 'requests' && renderRequestsTab()}
                     {activeTab === 'suggestions' && renderSuggestionsTab()}

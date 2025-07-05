@@ -18,6 +18,7 @@ import { eventService } from '../../services';
 import Avatar from '../../components/common/Avatar';
 import apiService from '../../services/apiService';
 import { formatDate, formatTime } from '../../utils/dateUtils';
+import InviteToEventModal from '../../components/events/InviteToEventModal';
 
 interface EventDetail {
     id: number;
@@ -81,9 +82,7 @@ const EventDetail: React.FC = () => {
     const [showAllAttendees, setShowAllAttendees] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showInviteModal, setShowInviteModal] = useState(false);
-    const [friendsToInvite, setFriendsToInvite] = useState<FriendUser[]>([]); // Tipi FriendUser[] olarak güncellendi
-    const [selectedFriends, setSelectedFriends] = useState<Set<number>>(new Set());
-    const [isInviting, setIsInviting] = useState(false);
+
 
     // Katılımcıları yeniden çekmek için bir fonksiyon
     const fetchAttendees = async () => {
@@ -91,6 +90,25 @@ const EventDetail: React.FC = () => {
         try {
             const attendeesData = await apiService.get<Attendee[]>(`/api/events/${id}/attendees`);
             setAttendees(attendeesData);
+
+            // Event state'ini güncelle: katılımcı sayısı ve kullanıcının katılım durumu
+            if (user && event) {
+                const userIsAttending = attendeesData.some(attendee =>
+                    attendee.id === user.id && attendee.status === 'attending'
+                );
+                setIsAttending(userIsAttending);
+
+                // Katılımcı sayısını güncelle
+                const attendingCount = attendeesData.filter(a => a.status === 'attending').length;
+                setEvent(prevEvent => {
+                    if (!prevEvent) return null;
+                    return {
+                        ...prevEvent,
+                        attendeesCount: attendingCount,
+                        isUserAttending: userIsAttending
+                    };
+                });
+            }
         } catch (error) {
             console.error('Katılımcılar alınırken hata:', error);
             setAttendees([]); // Hata durumunda listeyi temizle
@@ -115,17 +133,26 @@ const EventDetail: React.FC = () => {
                     return;
                 }
 
-                // EventData (EventItem) EventDetail tipine dönüştürülüyor
+                // EventData (Event) EventDetail tipine dönüştürülüyor
                 const detailedEventData: EventDetail = {
-                    ...eventData,
-                    // EventItem'da olmayan veya EventDetail'de farklı olan alanlar için varsayılan/dönüştürülmüş değerler
-                    // attendees başlangıçta boş, ayrı API çağrısı ile dolacak
-                    attendees: [],
-                    // creatorId EventItem'da yoksa, opsiyonel olduğu için sorun değil
-                    // Diğer alanlar EventItem ve EventDetail arasında eşleşiyorsa doğrudan kopyalanır
+                    id: eventData.id,
+                    title: eventData.title,
+                    description: eventData.description,
+                    location: eventData.location,
+                    startDate: eventData.final_start_time || eventData.created_at,
+                    endDate: eventData.final_end_time,
+                    creatorId: eventData.creator_user_id,
+                    creatorName: eventData.creator ? `${eventData.creator.first_name} ${eventData.creator.last_name}` : 'Bilinmiyor',
+                    attendeesCount: 0, // Ayrı API çağrısı ile dolacak
+                    isPrivate: eventData.is_private,
+                    roomId: eventData.room_id,
+                    roomName: undefined, // Room detayı ayrı API çağrısı ile gelecek
+                    imageUrl: eventData.image_url,
+                    attendees: [], // Ayrı API çağrısı ile dolacak
+                    isUserAttending: false, // Varsayılan değer, backend'den bu bilgi gelmiyor
                 };
                 setEvent(detailedEventData);
-                setIsAttending(eventData.isUserAttending || false);
+                setIsAttending(false); // Varsayılan değer
 
                 // Katılımcıları API'den çek
                 await fetchAttendees();
@@ -210,7 +237,6 @@ const EventDetail: React.FC = () => {
                     message: 'Etkinlik katılımınız iptal edildi',
                     duration: 3000
                 });
-                setIsAttending(false);
 
             } else if (event?.isPrivate) {
                 await eventService.attendEvent(Number(id));
@@ -228,21 +254,10 @@ const EventDetail: React.FC = () => {
                     message: 'Etkinliğe katılımınız onaylandı',
                     duration: 3000
                 });
-                setIsAttending(true);
             }
 
+            // Katılımcı listesini yenile (bu fonksiyon aynı zamanda state'i de güncelleyecek)
             await fetchAttendees();
-
-            if (event) {
-                setEvent(prevEvent => {
-                    if (!prevEvent) return null;
-                    return {
-                        ...prevEvent,
-                        attendeesCount: isAttending ? prevEvent.attendeesCount - 1 : prevEvent.attendeesCount + 1,
-                        isUserAttending: !isAttending
-                    };
-                });
-            }
         } catch (error: any) {
             console.error('İşlem sırasında hata:', error);
             addNotification({
@@ -288,67 +303,9 @@ const EventDetail: React.FC = () => {
             return;
         }
         setShowInviteModal(true);
-        try {
-            const friendsData = await apiService.get<FriendUser[]>('/api/friendships');
-
-            // Etkinliğe zaten katılan veya davetli olan kullanıcıların ID'lerini bir Set'e alalım.
-            const existingParticipantIds = new Set(attendees.map(a => a.id));
-
-            // Arkadaşları filtrele: Zaten davetli/katılımcı olmayanları ve kendimizi listeden çıkaralım.
-            const filteredFriends = friendsData.filter(friend =>
-                friend.id !== user?.id && !existingParticipantIds.has(friend.id)
-            );
-
-            setFriendsToInvite(filteredFriends);
-
-        } catch (error) {
-            console.error("Arkadaşlar yüklenirken hata:", error);
-            addNotification({ type: 'error', message: 'Arkadaş listeniz yüklenirken bir sorun oluştu.' });
-            setFriendsToInvite([]);
-        }
     };
 
-    const handleToggleFriendSelection = (friendId: number) => {
-        setSelectedFriends(prev => {
-            const newSelection = new Set(prev);
-            if (newSelection.has(friendId)) {
-                newSelection.delete(friendId);
-            } else {
-                newSelection.add(friendId);
-            }
-            return newSelection;
-        });
-    };
 
-    const handleSubmitInvites = async () => {
-        if (!id || selectedFriends.size === 0) return;
-
-        setIsInviting(true);
-        let successCount = 0;
-        let errorCount = 0;
-
-        for (const friendId of selectedFriends) {
-            try {
-                await apiService.post(`/api/events/${id}/invite`, { invitee_id: friendId });
-                successCount++;
-            } catch (error: any) {
-                console.error(`Kullanıcı ${friendId} davet edilirken hata:`, error);
-                errorCount++;
-                // Tek tek hata mesajı göstermek yerine toplu bir özet gösterilebilir
-            }
-        }
-        setIsInviting(false);
-        setShowInviteModal(false);
-        setSelectedFriends(new Set());
-
-        if (successCount > 0) {
-            addNotification({ type: 'success', message: `${successCount} arkadaş başarıyla davet edildi.` });
-        }
-        if (errorCount > 0) {
-            addNotification({ type: 'error', message: `${errorCount} davet gönderilemedi. Detaylar için konsolu kontrol edin.` });
-        }
-        // Katılımcı listesini veya davetli listesini yenilemek gerekebilir.
-    };
 
     const handleShareEvent = () => {
         // Paylaşım seçeneklerini gösterecek bir menü/modal açılabilir
@@ -380,57 +337,7 @@ const EventDetail: React.FC = () => {
         }
     };
 
-    // Modal JSX'i (render fonksiyonu içinde kullanılacak)
-    const renderInviteModal = () => {
-        if (!showInviteModal) return null;
 
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4 transition-opacity duration-300 ease-in-out">
-                <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg transform transition-all duration-300 ease-in-out scale-95 opacity-0 animate-modalShow">
-                    <h3 className="text-xl font-semibold leading-6 text-gray-800 mb-6">Arkadaşlarını Davet Et</h3>
-                    <div className="max-h-72 overflow-y-auto mb-6 space-y-3 pr-2">
-                        {friendsToInvite.length === 0 && (
-                            <p className='text-sm text-gray-500 py-4 text-center'>Davet edilebilecek arkadaş bulunamadı. Önce arkadaş eklemeyi deneyin.</p>
-                        )}
-                        {friendsToInvite.map((friend: FriendUser) => (
-                            <div key={friend.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                                <div className='flex items-center'>
-                                    <Avatar src={friend.profilePictureUrl} alt={friend.username} className="h-10 w-10 rounded-full mr-3" />
-                                    <div>
-                                        <span className="font-medium text-gray-700">{friend.firstName} {friend.lastName}</span>
-                                        <span className="text-sm text-gray-500 block">@{friend.username}</span>
-                                    </div>
-                                </div>
-                                <input
-                                    type="checkbox"
-                                    checked={selectedFriends.has(friend.id)}
-                                    onChange={() => handleToggleFriendSelection(friend.id)}
-                                    className="form-checkbox h-5 w-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 transition-colors"
-                                />
-                            </div>
-                        ))}
-                    </div>
-                    <div className="mt-8 flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3">
-                        <button
-                            type="button"
-                            onClick={() => { setShowInviteModal(false); setSelectedFriends(new Set()); }}
-                            className="px-5 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                        >
-                            İptal
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleSubmitInvites}
-                            disabled={isInviting || selectedFriends.size === 0}
-                            className="px-5 py-2.5 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-lg hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                        >
-                            {isInviting ? 'Gönderiliyor...' : `Seçili Kişileri Davet Et (${selectedFriends.size})`}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
 
     // Görüntülenecek katılımcılar
     const displayedAttendees = showAllAttendees
@@ -495,7 +402,7 @@ const EventDetail: React.FC = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-100 to-indigo-100 py-8 md:py-12">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                {renderInviteModal()} {/* Modal'ı render et */}
+                {/* Modal'ı render et */}
                 <div className="mb-8">
                     <button
                         onClick={() => navigate(-1)}
@@ -729,6 +636,22 @@ const EventDetail: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Etkinlik Davet Modal'ı */}
+            <InviteToEventModal
+                isOpen={showInviteModal}
+                onClose={() => setShowInviteModal(false)}
+                eventId={Number(id)}
+                eventTitle={event?.title || ''}
+                onInviteSent={() => {
+                    setShowInviteModal(false);
+                    addNotification({
+                        type: 'success',
+                        message: 'Davetler başarıyla gönderildi',
+                        duration: 3000
+                    });
+                }}
+            />
         </div>
     );
 };

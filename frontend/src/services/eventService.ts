@@ -262,7 +262,48 @@ const eventService = {
     },
 
     inviteUserToEvent: async (eventId: number, userId: number) => {
-        return apiService.post(`/api/events/${eventId}/invite`, { userId });
+        return apiService.post(`/api/events/${eventId}/invite`, { invitee_id: userId });
+    },
+
+    /**
+     * Kullanıcının etkinlik davetlerini getirir
+     */
+    getEventInvitations: async () => {
+        try {
+            const response = await apiService.get('/api/event-invitations/');
+            return response;
+        } catch (error) {
+            console.error('Etkinlik davetleri alınırken hata oluştu:', error);
+            return [];
+        }
+    },
+
+    /**
+     * Etkinlik davetini kabul eder
+     * @param invitationId Davet ID
+     */
+    acceptEventInvitation: async (invitationId: number) => {
+        try {
+            const response = await apiService.post(`/api/event-invitations/${invitationId}/accept`);
+            return response;
+        } catch (error) {
+            console.error('Etkinlik daveti kabul edilirken hata oluştu:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Etkinlik davetini reddeder
+     * @param invitationId Davet ID
+     */
+    declineEventInvitation: async (invitationId: number) => {
+        try {
+            const response = await apiService.post(`/api/event-invitations/${invitationId}/decline`);
+            return response;
+        } catch (error) {
+            console.error('Etkinlik daveti reddedilirken hata oluştu:', error);
+            throw error;
+        }
     }
 };
 

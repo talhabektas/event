@@ -5,7 +5,8 @@ import { useApp } from '../contexts/AppContext';
 import EventFeed from '../components/dashboard/EventFeed';
 import Suggestions from './suggestions/Suggestions';
 import AIRecommendations from '../components/dashboard/AIRecommendations';
-import { dashboardService } from '../services';
+import { eventService } from '../services';
+import apiService from '../services/apiService';
 import type { EventItem } from '../services/dashboardService';
 import type { AIRecommendationItem } from '../services/dashboardService';
 import { Card, Button } from '../components/common';
@@ -19,6 +20,12 @@ import {
     HeartIcon,
     GlobeAltIcon
 } from '@heroicons/react/24/outline';
+
+// Kullanıcı önerisi için interface
+interface UserSuggestion {
+    ID: number;
+    SuggestionText: string;
+}
 
 const Home: React.FC = () => {
     const navigate = useNavigate();
@@ -40,9 +47,17 @@ const Home: React.FC = () => {
     useEffect(() => {
         const loadDashboardData = async () => {
             try {
-                const data = await dashboardService.getDashboardData();
-                setUserFeed(data?.userFeed?.events || []);
-                setAiRecommendations(data?.aiRecommendations?.items || []);
+                // Etkinlikleri ve önerileri paralel olarak çek
+                const [eventsData, suggestionsData] = await Promise.all([
+                    eventService.getEvents(1, 5), // İlk 5 etkinliği getir
+                    fetchUserSuggestions()
+                ]);
+
+                // Etkinlik verilerini güncelle
+                setUserFeed(eventsData.events || []);
+
+                // AI önerilerini güncelle
+                setAiRecommendations(suggestionsData || []);
             } catch (error) {
                 console.error('Dashboard verileri yüklenirken hata:', error);
                 addNotification({
@@ -60,6 +75,32 @@ const Home: React.FC = () => {
             }
         };
 
+        // Kullanıcı önerilerini getir ve AI önerilerine dönüştür
+        const fetchUserSuggestions = async (): Promise<AIRecommendationItem[]> => {
+            try {
+                const storedSuggestions = await apiService.get<UserSuggestion[]>('/api/users/me/suggestions');
+
+                if (storedSuggestions && storedSuggestions.length > 0) {
+                    // Kullanıcı önerilerini AI öneri formatına dönüştür
+                    return storedSuggestions.map((suggestion, index) => ({
+                        id: suggestion.ID,
+                        type: 'event' as const,
+                        title: `Öneri #${index + 1}`,
+                        description: suggestion.SuggestionText,
+                        matchScore: 85 + Math.random() * 15, // Rastgele puan
+                        matchPercentage: Math.floor(85 + Math.random() * 15),
+                        details: {
+                            tags: ['AI Önerisi', 'Kişiselleştirilmiş']
+                        }
+                    }));
+                }
+                return [];
+            } catch (error) {
+                console.error('Öneriler alınırken hata:', error);
+                return [];
+            }
+        };
+
         if (user) {
             loadDashboardData();
         }
@@ -67,7 +108,7 @@ const Home: React.FC = () => {
 
     const handleAttendEvent = async (eventId: number) => {
         try {
-            await dashboardService.attendEvent(eventId);
+            await apiService.post(`/api/events/${eventId}/attend`);
             const eventToUpdate = userFeed.find(e => e.id === eventId);
             if (eventToUpdate) {
                 const updatedEvent = {

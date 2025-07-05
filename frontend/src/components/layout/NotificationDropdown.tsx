@@ -85,6 +85,36 @@ const NotificationDropdown: React.FC = () => {
         }
     };
 
+    const handleEventInvitationAction = async (e: React.MouseEvent, action: 'accept' | 'decline', invitationId: number, notificationId: number) => {
+        e.stopPropagation();
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`http://localhost:8082/api/event-invitations/${invitationId}/${action}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Event invitation action failed');
+            }
+
+            if (action === 'accept') {
+                addNotification({ type: 'success', message: 'Etkinlik daveti kabul edildi!' });
+            } else {
+                addNotification({ type: 'info', message: 'Etkinlik daveti reddedildi.' });
+            }
+
+            await markSystemNotificationsAsRead([notificationId]);
+            await fetchSystemNotifications(); // Bildirimleri yenile
+        } catch (error) {
+            console.error(`Event invitation ${action} failed:`, error);
+            addNotification({ type: 'error', message: 'İşlem sırasında hata oluştu.' });
+        }
+    };
+
     const renderNotificationContent = (notification: SystemNotification) => {
         if (notification.type === 'event_join_request' && notification.related_id) {
             const requestId = notification.related_id;
@@ -124,6 +154,30 @@ const NotificationDropdown: React.FC = () => {
                         </button>
                         <button
                             onClick={(e) => handleRoomInvitationAction(e, 'decline', invitationId, notification.id)}
+                            className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded hover:bg-red-600"
+                        >
+                            Reddet
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        if (notification.type === 'event_invitation' && notification.related_id) {
+            // Event invitation bildirimlerinde related_id invitation_id'dir
+            const invitationId = notification.related_id;
+            return (
+                <div>
+                    <p className="text-sm text-gray-700 mb-2">{notification.message}</p>
+                    <div className="flex justify-end space-x-2">
+                        <button
+                            onClick={(e) => handleEventInvitationAction(e, 'accept', invitationId, notification.id)}
+                            className="px-2 py-1 bg-green-500 text-white text-xs font-bold rounded hover:bg-green-600"
+                        >
+                            Kabul Et
+                        </button>
+                        <button
+                            onClick={(e) => handleEventInvitationAction(e, 'decline', invitationId, notification.id)}
                             className="px-2 py-1 bg-red-500 text-white text-xs font-bold rounded hover:bg-red-600"
                         >
                             Reddet
