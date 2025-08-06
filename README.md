@@ -85,7 +85,7 @@ PORT=8082
 3. **İlgi alanlarını seç**
 4. **Etkinlik oluştur veya katıl**
 5. **Arkadaş ekle ve sohbet et**
-
+6. **Yapay zeka önerilerini gerçekleştirerek premium üye avantajlarından faydalanabilirsin**
 ## 🎯 Gelecek Planları
 
 - [ ] Event fotoğraf yükleme
@@ -108,10 +108,6 @@ PORT=8082
 ## 📄 License
 
 This project is licensed under the MIT License.
-
-## 👨‍💻 Geliştirici
-
-Proje geliştirme sürecinde modern yazılım mimarisi prensipleri ve en iyi uygulamalar kullanılmıştır.
 
 ---
 
