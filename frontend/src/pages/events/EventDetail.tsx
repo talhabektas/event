@@ -98,7 +98,7 @@ const EventDetail: React.FC = () => {
                 );
                 setIsAttending(userIsAttending);
 
-                // Katılımcı sayısını güncelle
+                // Katılımcı sayısını güncelle (sadece katılanları say)
                 const attendingCount = attendeesData.filter(a => a.status === 'attending').length;
                 setEvent(prevEvent => {
                     if (!prevEvent) return null;
@@ -106,6 +106,16 @@ const EventDetail: React.FC = () => {
                         ...prevEvent,
                         attendeesCount: attendingCount,
                         isUserAttending: userIsAttending
+                    };
+                });
+            } else if (event) {
+                // Giriş yapmamış kullanıcı için de katılımcı sayısını güncelle
+                const attendingCount = attendeesData.filter(a => a.status === 'attending').length;
+                setEvent(prevEvent => {
+                    if (!prevEvent) return null;
+                    return {
+                        ...prevEvent,
+                        attendeesCount: attendingCount
                     };
                 });
             }
@@ -142,8 +152,8 @@ const EventDetail: React.FC = () => {
                     startDate: eventData.final_start_time || eventData.created_at,
                     endDate: eventData.final_end_time,
                     creatorId: eventData.creator_user_id,
-                    creatorName: eventData.creator ? `${eventData.creator.first_name} ${eventData.creator.last_name}` : 'Bilinmiyor',
-                    attendeesCount: 0, // Ayrı API çağrısı ile dolacak
+                    creatorName: eventData.creatorName || 'Bilinmiyor',
+                    attendeesCount: eventData.attendeesCount || 0,
                     isPrivate: eventData.is_private,
                     roomId: eventData.room_id,
                     roomName: undefined, // Room detayı ayrı API çağrısı ile gelecek
@@ -270,31 +280,43 @@ const EventDetail: React.FC = () => {
         }
     };
 
-    const handleVoteForTime = (optionId: number) => {
+    const handleVoteForTime = async (optionId: number) => {
         if (!isAuthenticated) {
             navigate('/giris', { state: { from: `/etkinlikler/${id}` } });
             return;
         }
 
-        // Normalde API'a istek yapılacak, şimdilik yerel state'i güncelliyoruz
-        setTimeOptions(prevOptions =>
-            prevOptions.map(option => {
-                if (option.id === optionId) {
-                    return {
-                        ...option,
-                        votes: option.hasVoted ? option.votes - 1 : option.votes + 1,
-                        hasVoted: !option.hasVoted
-                    };
-                }
-                return option;
-            })
-        );
+        try {
+            // API'ye oy verme isteği gönder
+            await apiService.post(`/api/events/${id}/time-options/${optionId}/vote`);
+            
+            // Başarılı ise yerel state'i güncelle
+            setTimeOptions(prevOptions =>
+                prevOptions.map(option => {
+                    if (option.id === optionId) {
+                        return {
+                            ...option,
+                            votes: option.hasVoted ? option.votes - 1 : option.votes + 1,
+                            hasVoted: !option.hasVoted
+                        };
+                    }
+                    return option;
+                })
+            );
 
-        addNotification({
-            type: 'success',
-            message: 'Oyunuz kaydedildi',
-            duration: 3000
-        });
+            addNotification({
+                type: 'success',
+                message: 'Oyunuz kaydedildi',
+                duration: 3000
+            });
+        } catch (error: any) {
+            console.error('Oy verme hatası:', error);
+            addNotification({
+                type: 'error',
+                message: error.response?.data?.error || 'Oy verirken hata oluştu',
+                duration: 5000
+            });
+        }
     };
 
     const handleInviteParticipants = async () => {
@@ -561,11 +583,18 @@ const EventDetail: React.FC = () => {
                                 {/* Katılımcılar Listesi */}
                                 <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
                                     <div className="flex justify-between items-center mb-5">
-                                        <h2 className="text-xl font-semibold text-gray-800">Katılımcılar</h2>
+                                        <h2 className="text-xl font-semibold text-gray-800">Katılımcılar ve Davetliler</h2>
                                         {attendees && attendees.length > 0 && (
-                                            <span className="bg-indigo-100 text-indigo-800 text-sm font-semibold px-3 py-1 rounded-full">
-                                                {attendees.filter(a => a.status === 'attending').length} Katılıyor
-                                            </span>
+                                            <div className="flex space-x-2">
+                                                <span className="bg-green-100 text-green-800 text-sm font-semibold px-3 py-1 rounded-full">
+                                                    {attendees.filter(a => a.status === 'attending').length} Katılıyor
+                                                </span>
+                                                {attendees.filter(a => a.status === 'invited').length > 0 && (
+                                                    <span className="bg-yellow-100 text-yellow-800 text-sm font-semibold px-3 py-1 rounded-full">
+                                                        {attendees.filter(a => a.status === 'invited').length} Davet Edildi
+                                                    </span>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
 

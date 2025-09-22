@@ -177,6 +177,8 @@ func (s *EventService) GetEventByID(eventID uint64, userID uint64) (*models.Even
 		return nil, 0, err // Diğer veritabanı hataları
 	}
 	log.Printf("[EventService] Etkinlik bulundu: %+v", event)
+	log.Printf("[EventService] Creator bilgisi: ID=%d, Username=%s, FirstName=%s, LastName=%s", 
+		event.Creator.ID, event.Creator.Username, event.Creator.FirstName, event.Creator.LastName)
 
 	// Katılımcı sayısını hesapla
 	var attendeesCount int64
@@ -561,37 +563,104 @@ func (s *EventService) CancelAttendance(eventID, userID uint64) error {
 		Update("status", "not_attending").Error
 }
 
-// GetEventAttendees bir etkinliğe katılanların listesini döndürür.
+// GetEventAttendees bir etkinliğe katılanların ve davet edilenlerin listesini döndürür.
+// Frontend'in Attendee interface'i ile uyumlu format döndürür
 func (s *EventService) GetEventAttendees(eventID uint64) ([]interface{}, error) {
-	var attendees []models.EventAttendance
-	if err := s.db.Preload("User").
-		Where("event_id = ? AND status = ?", eventID, models.AttendanceAttending).
-		Find(&attendees).Error; err != nil {
+	// Etkinlik bilgisini al
+	var event models.Event
+	if err := s.db.First(&event, eventID).Error; err != nil {
 		return nil, err
 	}
 
-	// Gerekli bilgileri içeren bir struct listesi döndürelim
+	// Frontend'in beklediği AttendeeInfo formatı
 	type AttendeeInfo struct {
-		ID                uint64 `json:"id"`
-		FirstName         string `json:"first_name"`
-		LastName          string `json:"last_name"`
-		ProfilePictureURL string `json:"profile_picture_url"`
+		ID        uint64 `json:"id"`
+		Name      string `json:"name"`
+		AvatarURL string `json:"avatarUrl"`
+		Status    string `json:"status"`
 	}
 
-	result := make([]interface{}, len(attendees))
-	for i, a := range attendees {
-		result[i] = AttendeeInfo{
-			ID:                a.User.ID,
-			FirstName:         a.User.FirstName,
-			LastName:          a.User.LastName,
-			ProfilePictureURL: a.User.ProfilePictureURL,
+	// Katılımcıları ve davet edilenleri map ile birleştir (user ID'ye göre)
+	attendeeMap := make(map[uint64]*AttendeeInfo)
+
+	// 1. Katılan kullanıcıları al (EventAttendance)
+	var attendances []models.EventAttendance
+	if err := s.db.Preload("User").
+		Where("event_id = ?", eventID).
+		Find(&attendances).Error; err != nil {
+		return nil, err
+	}
+
+	for _, a := range attendances {
+		status := "attending"
+		switch string(a.Status) {
+		case string(models.AttendanceAttending):
+			status = "attending"
+		case "not_attending", "cancelled":
+			status = "declined"
+		default:
+			status = "attending"
+		}
+
+		attendeeMap[a.User.ID] = &AttendeeInfo{
+			ID:        a.User.ID,
+			Name:      a.User.FirstName + " " + a.User.LastName,
+			AvatarURL: a.User.ProfilePictureURL,
+			Status:    status,
 		}
 	}
+
+	// 2. Özel etkinlik ise davet edilenleri de al (EventInvitation)
+	if event.IsPrivate {
+		var invitations []models.EventInvitation
+		if err := s.db.Preload("Invitee").
+			Where("event_id = ?", eventID).
+			Find(&invitations).Error; err != nil {
+			log.Printf("Davetliler alınırken hata (normal olabilir): %v", err)
+		} else {
+			for _, inv := range invitations {
+				// Eğer bu kullanıcı zaten attendanceMap'te varsa status'unu güncelle
+				if existing, exists := attendeeMap[inv.Invitee.ID]; exists {
+					// Zaten katılım durumu var, invitation status'una göre güncelle
+					if inv.Status == models.InvitationDeclined {
+						existing.Status = "declined"
+					}
+				} else {
+					// Yeni davet edilen kullanıcı
+					status := "invited"
+					switch inv.Status {
+					case models.InvitationPending:
+						status = "invited"
+					case models.InvitationAccepted:
+						status = "attending"
+					case models.InvitationDeclined:
+						status = "declined"
+					default:
+						status = "invited"
+					}
+
+					attendeeMap[inv.Invitee.ID] = &AttendeeInfo{
+						ID:        inv.Invitee.ID,
+						Name:      inv.Invitee.FirstName + " " + inv.Invitee.LastName,
+						AvatarURL: inv.Invitee.ProfilePictureURL,
+						Status:    status,
+					}
+				}
+			}
+		}
+	}
+
+	// Map'i slice'a çevir
+	result := make([]interface{}, 0, len(attendeeMap))
+	for _, attendee := range attendeeMap {
+		result = append(result, *attendee)
+	}
+
 	return result, nil
 }
 
 // GetEventTimeOptions bir etkinliğin zaman seçeneklerini ve oy durumlarını döndürür.
-func (s *EventService) GetEventTimeOptions(eventID uint64) ([]interface{}, error) {
+func (s *EventService) GetEventTimeOptions(eventID uint64, userID uint64) ([]interface{}, error) {
 	type TimeOptionWithVotes struct {
 		ID        uint64 `json:"id"`
 		StartTime string `json:"startTime"`
@@ -612,8 +681,13 @@ func (s *EventService) GetEventTimeOptions(eventID uint64) ([]interface{}, error
 		var votesCount int64
 		s.db.Model(&models.EventVote{}).Where("event_time_option_id = ?", option.ID).Count(&votesCount)
 
-		// Kullanıcının oy verip vermediğini kontrol et (bu örnekte userID yok, genel liste varsayımı)
-		hasVoted := false // Gerçek bir implementasyonda userID'ye göre kontrol edilmeli
+		// Kullanıcının oy verip vermediğini kontrol et
+		hasVoted := false
+		if userID > 0 {
+			var voteCount int64
+			s.db.Model(&models.EventVote{}).Where("event_time_option_id = ? AND user_id = ?", option.ID, userID).Count(&voteCount)
+			hasVoted = voteCount > 0
+		}
 
 		result[i] = TimeOptionWithVotes{
 			ID:        option.ID,
@@ -717,7 +791,7 @@ func (s *EventService) AcceptEventInvitation(invitationID uint64, userID uint64)
 
 	// Daveti bul ve kontrol et
 	var invitation models.EventInvitation
-	if err := tx.Preload("Event").First(&invitation, invitationID).Error; err != nil {
+	if err := tx.Preload("Event").Preload("Invitee").First(&invitation, invitationID).Error; err != nil {
 		tx.Rollback()
 		return errors.New("davet bulunamadı")
 	}
@@ -775,7 +849,7 @@ func (s *EventService) AcceptEventInvitation(invitationID uint64, userID uint64)
 func (s *EventService) DeclineEventInvitation(invitationID uint64, userID uint64) error {
 	// Daveti bul ve kontrol et
 	var invitation models.EventInvitation
-	if err := s.db.Preload("Event").First(&invitation, invitationID).Error; err != nil {
+	if err := s.db.Preload("Event").Preload("Invitee").First(&invitation, invitationID).Error; err != nil {
 		return errors.New("davet bulunamadı")
 	}
 
